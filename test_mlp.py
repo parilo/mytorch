@@ -2,7 +2,8 @@ import torch as t
 import torch.nn.functional as F
 import numpy as np
 
-from mytorch.common import Tensor, MSE, Add
+from mytorch.common import MSE, Add
+from mytorch.core import Tensor
 from mytorch.mat import MatVecMul
 from mytorch.nonlin import ReLU
 

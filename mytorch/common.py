@@ -1,57 +1,6 @@
 import numpy as np
 
-
-class BackwardOp:
-
-    def __init__(self, op, *args, **kwargs):
-        self.op = op
-        self.args = args
-        self.kwargs = kwargs
-
-    def __call__(self, grad=None):
-        if grad is None:
-            grad = Tensor(np.array([1.0])[0])
-        self.op.bwd(grad, *self.args, **self.kwargs)
-
-    def __repr__(self):
-        return f'Backward: {self.op}' + \
-               ''.join([arg.data.shape for arg in self.args] if self.args else []) + \
-               ''.join([f' {name} {val.data.shape}' for name, val in self.kwargs.items()] if self.kwargs else [])
-
-
-class Tensor:
-
-    def __init__(
-            self,
-            data: np.ndarray,
-            requires_grad: bool = False,
-            backward=None,
-    ):
-        self.requires_grad = requires_grad
-        self.data = np.copy(data)
-        self.backward = backward or BackwardOp(self)
-        self.grad = None
-
-    def bwd(self, grad):
-        self.grad = grad
-        # sum grad over batch if needed
-        if len(self.grad.data.shape) > len(self.data.shape):
-            self.grad = Tensor(self.grad.data.sum(0))
-
-    def __repr__(self):
-        return str(self.data)
-
-
-class Op:
-
-    def __call__(self, *args, **kwargs):
-        return self.fwd(*args, **kwargs)
-
-    def fwd(self, *args, **kwargs):
-        raise NotImplemented()
-
-    def bwd(self, *args, **kwargs):
-        raise NotImplemented()
+from mytorch.core import Op, Tensor, BackwardOp
 
 
 class MSE(Op):
@@ -66,13 +15,13 @@ class MSE(Op):
         )
 
     def bwd(self, input_grad: Tensor, input: Tensor, target: Tensor):
-        inp_shape = input.data.shape
+        num_items = np.prod(input.data.shape)
         if input.requires_grad:
-            grad = 2 * input_grad.data * (input.data - target.data) / inp_shape[0] / inp_shape[1]
+            grad = 2 * input_grad.data * (input.data - target.data) / num_items
             input.backward(Tensor(grad))
 
         if target.requires_grad:
-            grad = 2 * input_grad.data * (target.data - input.data) / inp_shape[0] / inp_shape[1]
+            grad = 2 * input_grad.data * (target.data - input.data) / num_items
             target.backward(Tensor(grad))
 
 
@@ -93,3 +42,19 @@ class Add(Op):
         if tensor2.requires_grad:
             grad = input_grad.data * np.ones_like(tensor2.data)
             tensor2.backward(Tensor(grad))
+
+
+class Slice(Op):
+
+    def fwd(self, tensor: Tensor, slices):
+        return Tensor(
+            data=tensor.data[slices],
+            requires_grad=tensor.requires_grad,
+            backward=BackwardOp(self, tensor=tensor, slices=slices),
+        )
+
+    def bwd(self, input_grad: Tensor, tensor: Tensor, slices):
+        if tensor.requires_grad:
+            grad = np.zeros_like(tensor.data)
+            grad[slices] = input_grad.data
+            tensor.backward(Tensor(grad))
