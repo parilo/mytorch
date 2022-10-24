@@ -41,6 +41,9 @@ class Tensor:
             self.grad = Tensor(np.zeros_like(self.data))
         self.grad.data += grad_data
 
+    def zero_grad(self):
+        self.grad = None
+
     def __repr__(self):
         return str(self.data)
 
